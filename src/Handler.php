@@ -10,7 +10,7 @@ use Monolog\Logger;
  *
  * Can be used to store into php://stderr, remote and local files, etc.
  *
- * @author Jordi Boggiano <j.boggiano@seld.be>
+ * @author Xiaojun Luo <luoxiaojun1992@sina.cn>
  */
 class Handler extends AbstractProcessingHandler
 {
