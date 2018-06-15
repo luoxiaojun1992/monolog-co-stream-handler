@@ -19,12 +19,14 @@ class Handler extends AbstractProcessingHandler
     private $errorMessage;
     protected $filePermission;
     private $dirCreated;
+    private $stream_pool = [];
 
     /**
      * @param resource|string $stream
-     * @param int             $level          The minimum logging level at which this handler will be triggered
-     * @param Boolean         $bubble         Whether the messages that are handled can bubble up the stack or not
-     * @param int|null        $filePermission Optional file permissions (default (0644) are only for owner read/write)
+     * @param int             $level            The minimum logging level at which this handler will be triggered
+     * @param Boolean         $bubble           Whether the messages that are handled can bubble up the stack or not
+     * @param int|null        $filePermission   Optional file permissions (default (0644) are only for owner read/write)
+     * @param int             $stream_pool_size Size of stream pool
      *
      * @throws \Exception                If a missing directory is not buildable
      * @throws \InvalidArgumentException If stream is not a resource or string
@@ -33,7 +35,8 @@ class Handler extends AbstractProcessingHandler
         $stream,
         $level = Logger::DEBUG,
         $bubble = true,
-        $filePermission = null
+        $filePermission = null,
+        $stream_pool_size = 100
     )
     {
         parent::__construct($level, $bubble);
@@ -44,6 +47,10 @@ class Handler extends AbstractProcessingHandler
         }
 
         $this->filePermission = $filePermission;
+
+        for($i = 0; $i < $stream_pool_size; ++$i) {
+            $this->stream_pool[] = ['stream' => fopen($this->url, 'a'), 'status' => 0];
+        }
     }
 
     /**
@@ -51,7 +58,9 @@ class Handler extends AbstractProcessingHandler
      */
     public function close()
     {
-        //
+        foreach ($this->stream_pool as $stream) {
+            fclose($stream['stream']);
+        }
     }
 
     /**
@@ -75,7 +84,23 @@ class Handler extends AbstractProcessingHandler
         $this->createDir();
         $this->errorMessage = null;
         set_error_handler(array($this, 'customErrorHandler'));
-        $stream = fopen($this->url, 'a');
+
+        $stream = null;
+        $stream_id = 0;
+        foreach ($this->stream_pool as $id => $stream_instance) {
+            if ($stream_instance['status'] == 0) {
+                $stream_id = $id;
+                $this->stream_pool[$id]['status'] = 1;
+                $stream = $stream_instance['stream'];
+                break;
+            }
+        }
+        if (!$stream) {
+            $stream = fopen($this->url, 'a');
+            $this->stream_pool[] = ['stream' => $stream, 'status' => 1];
+            $stream_id = count($this->stream_pool) - 1;
+        }
+
         if ($this->filePermission !== null) {
             @chmod($this->url, $this->filePermission);
         }
@@ -85,24 +110,25 @@ class Handler extends AbstractProcessingHandler
             throw new \UnexpectedValueException(sprintf('The stream or file "%s" could not be opened: ' . $this->errorMessage, $this->url));
         }
 
-        $this->streamWrite($stream, $record);
+        $this->streamWrite($stream, $record, $stream_id);
     }
 
     /**
      * Write to stream
      * @param resource $stream
      * @param array $record
+     * @param int $stream_id
      */
-    protected function streamWrite($stream, array $record)
+    protected function streamWrite($stream, array $record, $stream_id)
     {
         $logContent = (string)$record['formatted'];
 
         if (extension_loaded('swoole')) {
-            if (function_exists('go')) {
-                if (class_exists('co')) {
-                    go(function () use ($stream, $logContent) {
-                        co::fwrite($stream, $logContent);
-                        fclose($stream);
+            if (function_exists('\go')) {
+                if (class_exists('\co')) {
+                    \go(function () use ($stream, $logContent, $stream_id) {
+                        \co::fwrite($stream, $logContent);
+                        $this->stream_pool[$stream_id]['status'] = 0;
                     });
                     return;
                 }
@@ -110,7 +136,7 @@ class Handler extends AbstractProcessingHandler
         }
 
         fwrite($stream, $logContent);
-        fclose($stream);
+        $this->stream_pool[$stream_id]['status'] = 0;
     }
 
     private function customErrorHandler($code, $msg)

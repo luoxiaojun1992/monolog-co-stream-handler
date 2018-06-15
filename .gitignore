@@ -2,3 +2,5 @@ vendor
 vendor/*
 .idea
 .idea/*
+logs
+logs/*
