@@ -60,9 +60,8 @@ class Handler extends AbstractProcessingHandler
         }
 
         for($i = 0; $i < $stream_pool_size; ++$i) {
-            $this->stream_pool[] = ['stream' => fopen($this->url, 'a'), 'status' => 0];
-            $stream_id = count($this->stream_pool) - 1;
-            $this->available_streams[$stream_id] = $stream_id;
+            $stream_id = $this->createStream();
+            $this->releaseStream($stream_id);
         }
     }
 
@@ -86,27 +85,44 @@ class Handler extends AbstractProcessingHandler
     public function releaseStream($stream_id)
     {
         $this->stream_pool[$stream_id]['status'] = 0;
-        unset($this->occupied_streams[$stream_id]);
+        if (isset($this->occupied_streams[$stream_id])) {
+            unset($this->occupied_streams[$stream_id]);
+        }
         $this->available_streams[$stream_id] = $stream_id;
     }
 
-    public function getStream()
+    public function createStream()
+    {
+        $stream = fopen($this->url, 'a');
+        $this->stream_pool[] = ['stream' => $stream, 'status' => 0];
+        return count($this->stream_pool) - 1;
+    }
+
+    public function occupyStream($stream_id)
+    {
+        $this->stream_pool[$stream_id]['status'] = 1;
+        if (isset($this->available_streams[$stream_id])) {
+            unset($this->available_streams[$stream_id]);
+        }
+        $this->occupied_streams[$stream_id] = $stream_id;
+    }
+
+    public function pickStream()
     {
         $stream = null;
         $stream_id = 0;
         if (count($this->available_streams) > 0) {
             $stream_id = array_pop($this->available_streams);
-            $this->stream_pool[$stream_id]['status'] = 1;
-            $this->occupied_streams[$stream_id] = $stream_id;
-            $stream = $this->stream_pool[$stream_id]['stream'];
+            $this->occupyStream($stream_id);
         }
         if (!$stream) {
             if (count($this->stream_pool) < $this->stream_pool_max_size) {
-                $stream = fopen($this->url, 'a');
-                $this->stream_pool[] = ['stream' => $stream, 'status' => 1];
-                $stream_id = count($this->stream_pool) - 1;
-                $this->occupied_streams[$stream_id] = $stream_id;
+                $stream_id = $this->createStream();
+                $this->occupyStream($stream_id);
             }
+        }
+        if ($stream_id > 0) {
+            $stream = $this->stream_pool[$stream_id]['stream'];
         }
 
         return [$stream_id, $stream];
@@ -134,7 +150,7 @@ class Handler extends AbstractProcessingHandler
         $this->errorMessage = null;
         set_error_handler(array($this, 'customErrorHandler'));
 
-        list($stream_id, $stream) = $this->getStream();
+        list($stream_id, $stream) = $this->pickStream();
 
         if ($this->filePermission !== null) {
             @chmod($this->url, $this->filePermission);
