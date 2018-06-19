@@ -20,13 +20,17 @@ class Handler extends AbstractProcessingHandler
     protected $filePermission;
     private $dirCreated;
     private $stream_pool = [];
+    private $available_streams = [];
+    private $occupied_streams = [];
+    private $stream_pool_max_size;
 
     /**
      * @param resource|string $stream
-     * @param int             $level            The minimum logging level at which this handler will be triggered
-     * @param Boolean         $bubble           Whether the messages that are handled can bubble up the stack or not
-     * @param int|null        $filePermission   Optional file permissions (default (0644) are only for owner read/write)
-     * @param int             $stream_pool_size Size of stream pool
+     * @param int             $level                 The minimum logging level at which this handler will be triggered
+     * @param Boolean         $bubble                Whether the messages that are handled can bubble up the stack or not
+     * @param int|null        $filePermission        Optional file permissions (default (0644) are only for owner read/write)
+     * @param int             $stream_pool_size      Initial Size of stream pool
+     * @param int             $stream_pool_max_size  Max size of stream pool
      *
      * @throws \Exception                If a missing directory is not buildable
      * @throws \InvalidArgumentException If stream is not a resource or string
@@ -36,7 +40,8 @@ class Handler extends AbstractProcessingHandler
         $level = Logger::DEBUG,
         $bubble = true,
         $filePermission = null,
-        $stream_pool_size = 100
+        $stream_pool_size = 100,
+        $stream_pool_max_size = 1024
     )
     {
         parent::__construct($level, $bubble);
@@ -48,8 +53,16 @@ class Handler extends AbstractProcessingHandler
 
         $this->filePermission = $filePermission;
 
+        $this->stream_pool_max_size = $stream_pool_max_size;
+
+        if ($stream_pool_size > $stream_pool_max_size) {
+            $stream_pool_size = $stream_pool_max_size;
+        }
+
         for($i = 0; $i < $stream_pool_size; ++$i) {
             $this->stream_pool[] = ['stream' => fopen($this->url, 'a'), 'status' => 0];
+            $stream_id = count($this->stream_pool) - 1;
+            $this->available_streams[$stream_id] = $stream_id;
         }
     }
 
@@ -58,9 +71,45 @@ class Handler extends AbstractProcessingHandler
      */
     public function close()
     {
-        foreach ($this->stream_pool as $stream) {
+        foreach ($this->stream_pool as $stream_id => $stream) {
             fclose($stream['stream']);
+            unset($this->stream_pool[$stream_id]);
+            if (isset($this->available_streams[$stream_id])) {
+                unset($this->available_streams[$stream_id]);
+            }
+            if (isset($this->occupied_streams[$stream_id])) {
+                unset($this->occupied_streams[$stream_id]);
+            }
         }
+    }
+
+    public function releaseStream($stream_id)
+    {
+        $this->stream_pool[$stream_id]['status'] = 0;
+        unset($this->occupied_streams[$stream_id]);
+        $this->available_streams[$stream_id] = $stream_id;
+    }
+
+    public function getStream()
+    {
+        $stream = null;
+        $stream_id = 0;
+        if (count($this->available_streams) > 0) {
+            $stream_id = array_pop($this->available_streams);
+            $this->stream_pool[$stream_id]['status'] = 1;
+            $this->occupied_streams[$stream_id] = $stream_id;
+            $stream = $this->stream_pool[$stream_id]['stream'];
+        }
+        if (!$stream) {
+            if (count($this->stream_pool) < $this->stream_pool_max_size) {
+                $stream = fopen($this->url, 'a');
+                $this->stream_pool[] = ['stream' => $stream, 'status' => 1];
+                $stream_id = count($this->stream_pool) - 1;
+                $this->occupied_streams[$stream_id] = $stream_id;
+            }
+        }
+
+        return [$stream_id, $stream];
     }
 
     /**
@@ -85,21 +134,7 @@ class Handler extends AbstractProcessingHandler
         $this->errorMessage = null;
         set_error_handler(array($this, 'customErrorHandler'));
 
-        $stream = null;
-        $stream_id = 0;
-        foreach ($this->stream_pool as $id => $stream_instance) {
-            if ($stream_instance['status'] == 0) {
-                $stream_id = $id;
-                $this->stream_pool[$id]['status'] = 1;
-                $stream = $stream_instance['stream'];
-                break;
-            }
-        }
-        if (!$stream) {
-            $stream = fopen($this->url, 'a');
-            $this->stream_pool[] = ['stream' => $stream, 'status' => 1];
-            $stream_id = count($this->stream_pool) - 1;
-        }
+        list($stream_id, $stream) = $this->getStream();
 
         if ($this->filePermission !== null) {
             @chmod($this->url, $this->filePermission);
@@ -126,9 +161,10 @@ class Handler extends AbstractProcessingHandler
         if (extension_loaded('swoole')) {
             if (function_exists('\go')) {
                 if (class_exists('\co')) {
-                    \go(function () use ($stream, $logContent, $stream_id) {
+                    $thisObj = $this;
+                    \go(function () use ($stream, $logContent, $stream_id, $thisObj) {
                         \co::fwrite($stream, $logContent);
-                        $this->stream_pool[$stream_id]['status'] = 0;
+                        $thisObj->releaseStream($stream_id);
                     });
                     return;
                 }
@@ -136,7 +172,7 @@ class Handler extends AbstractProcessingHandler
         }
 
         fwrite($stream, $logContent);
-        $this->stream_pool[$stream_id]['status'] = 0;
+        $this->releaseStream($stream_id);
     }
 
     private function customErrorHandler($code, $msg)
