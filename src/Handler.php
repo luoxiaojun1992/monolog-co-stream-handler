@@ -82,6 +82,11 @@ class Handler extends AbstractProcessingHandler
         }
     }
 
+    /**
+     * Release a stream resource to available stream pool
+     *
+     * @param $stream_id
+     */
     public function releaseStream($stream_id)
     {
         $this->stream_pool[$stream_id]['status'] = 0;
@@ -91,6 +96,11 @@ class Handler extends AbstractProcessingHandler
         $this->available_streams[$stream_id] = $stream_id;
     }
 
+    /**
+     * Create a stream resource to stream pool
+     *
+     * @return int
+     */
     public function createStream()
     {
         $stream = fopen($this->url, 'a');
@@ -98,6 +108,11 @@ class Handler extends AbstractProcessingHandler
         return count($this->stream_pool) - 1;
     }
 
+    /**
+     * Put a stream resource to occupied stream pool
+     *
+     * @param $stream_id
+     */
     public function occupyStream($stream_id)
     {
         $this->stream_pool[$stream_id]['status'] = 1;
@@ -107,6 +122,11 @@ class Handler extends AbstractProcessingHandler
         $this->occupied_streams[$stream_id] = $stream_id;
     }
 
+    /**
+     * Pick an available stream resource
+     *
+     * @return array
+     */
     public function pickStream()
     {
         $stream = null;
