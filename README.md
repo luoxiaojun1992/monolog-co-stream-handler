@@ -1,5 +1,7 @@
 # monolog-co-stream-handler
 
+[![Build Status](https://travis-ci.org/luoxiaojun1992/monolog-co-stream-handler.svg?branch=master)](https://travis-ci.org/luoxiaojun1992/monolog-co-stream-handler)
+
 ## 中文版
 
 ### 描述
