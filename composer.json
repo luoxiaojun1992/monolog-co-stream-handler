@@ -15,5 +15,14 @@
   },
   "autoload": {
     "psr-4": {"Lxj\\Monolog\\Co\\Stream\\": "src/"}
-  }
+  },
+  "repositories": [
+    {
+      "packagist": false
+    },
+    {
+      "type": "composer",
+      "url": "https://packagist.phpcomposer.com"
+    }
+  ],
 }
