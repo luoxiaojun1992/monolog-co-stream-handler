@@ -18,5 +18,6 @@ class HandlerTest extends \PHPUnit\Framework\TestCase
 
 EOF;
         $this->assertStringEqualsFile($log_path, $expected);
+        swoole_event::wait();
     }
 }
