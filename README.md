@@ -37,7 +37,7 @@ Monolog coroutine stream handler based on swoole coroutine.
 ### Requirements
 1. Swoole2.1.0+ (compile with arguments --enable-openssl --enable-coroutine)
 2. PHP7.1+
-3. Don't install opencensus extension to avoiding memory leak
+3. Don't install opencensus extension to avoiding memory leak.
 
 ### Installation
 
@@ -56,4 +56,4 @@ or add a requirement to composer.json
 ```
 
 ### Usage
-Please see tests/HandlerTests.php
+Please see tests/HandlerTests.php.
