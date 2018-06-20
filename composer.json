@@ -10,7 +10,8 @@
     }
   ],
   "require": {
-    "monolog/monolog": "*"
+    "monolog/monolog": "*",
+    "phpunit/phpunit": "*"
   },
   "autoload": {
     "psr-4": {"Lxj\\Monolog\\Co\\Stream\\": "src/"}
