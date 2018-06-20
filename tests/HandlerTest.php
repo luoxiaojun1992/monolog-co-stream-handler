@@ -20,6 +20,12 @@ EOF;
 
         swoole_event::wait();
 
+        $start = time();
+        while (!file_get_contents($log_path)) {
+            if (time() - $start > 5) {
+                break;
+            }
+        }
         $this->assertStringEqualsFile($log_path, $expected);
     }
 }
