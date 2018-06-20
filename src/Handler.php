@@ -50,6 +50,7 @@ class Handler extends AbstractProcessingHandler
 
         $this->filePermission = $filePermission;
 
+        $this->createDir();
         $this->stream_pool = new StreamPool($this->url, $stream_pool_size, $stream_pool_max_size);
     }
 
