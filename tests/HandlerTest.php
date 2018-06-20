@@ -57,5 +57,7 @@ EOF;
             }
         }
         $this->assertStringEqualsFile($log_path, $expected);
+
+        unlink($log_path);
     }
 }
