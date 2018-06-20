@@ -42,10 +42,8 @@ class StreamPool
     public function releaseStream($stream_id)
     {
         $this->stream_pool[$stream_id]['status'] = 0;
-        if (isset($this->occupied_streams[$stream_id])) {
-            unset($this->occupied_streams[$stream_id]);
-        }
-        $this->available_streams[$stream_id] = $stream_id;
+        $this->removeOccupiedStream($stream_id);
+        $this->addAvailableStream($stream_id);
     }
 
     /**
@@ -68,10 +66,8 @@ class StreamPool
     public function occupyStream($stream_id)
     {
         $this->stream_pool[$stream_id]['status'] = 1;
-        if (isset($this->available_streams[$stream_id])) {
-            unset($this->available_streams[$stream_id]);
-        }
-        $this->occupied_streams[$stream_id] = $stream_id;
+        $this->removeAvailableStream($stream_id);
+        $this->addOccupiedStream($stream_id);
     }
 
     /**
@@ -108,12 +104,32 @@ class StreamPool
         foreach ($this->stream_pool as $stream_id => $stream) {
             fclose($stream['stream']);
             unset($this->stream_pool[$stream_id]);
-            if (isset($this->available_streams[$stream_id])) {
-                unset($this->available_streams[$stream_id]);
-            }
-            if (isset($this->occupied_streams[$stream_id])) {
-                unset($this->occupied_streams[$stream_id]);
-            }
+            $this->removeAvailableStream($stream_id);
+            $this->removeOccupiedStream($stream_id);
+        }
+    }
+
+    private function addAvailableStream($stream_id)
+    {
+        $this->available_streams[$stream_id] = $stream_id;
+    }
+
+    private function removeAvailableStream($stream_id)
+    {
+        if (isset($this->available_streams[$stream_id])) {
+            unset($this->available_streams[$stream_id]);
+        }
+    }
+
+    private function addOccupiedStream($stream_id)
+    {
+        $this->occupied_streams[$stream_id] = $stream_id;
+    }
+
+    private function removeOccupiedStream($stream_id)
+    {
+        if (isset($this->occupied_streams[$stream_id])) {
+            unset($this->occupied_streams[$stream_id]);
         }
     }
 
