@@ -44,7 +44,7 @@ class StreamPool
      */
     public function releaseStream($stream_id)
     {
-        $this->stream_pool[$stream_id]['status'] = self::STREAM_AVAILABLE;
+        $this->setStreamStatus($stream_id, self::STREAM_AVAILABLE);
         $this->removeOccupiedStream($stream_id);
         $this->addAvailableStream($stream_id);
     }
@@ -68,7 +68,7 @@ class StreamPool
      */
     public function occupyStream($stream_id)
     {
-        $this->stream_pool[$stream_id]['status'] = self::STREAM_OCCUPIED;
+        $this->setStreamStatus($stream_id, self::STREAM_OCCUPIED);
         $this->removeAvailableStream($stream_id);
         $this->addOccupiedStream($stream_id);
     }
@@ -134,6 +134,11 @@ class StreamPool
         if (isset($this->occupied_streams[$stream_id])) {
             unset($this->occupied_streams[$stream_id]);
         }
+    }
+
+    private function setStreamStatus($stream_id, $status)
+    {
+        $this->stream_pool[$stream_id]['status'] = $status;
     }
 
     public function __destruct()
