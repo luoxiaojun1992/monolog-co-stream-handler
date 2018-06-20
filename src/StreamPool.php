@@ -4,6 +4,9 @@ namespace Lxj\Monolog\Co\Stream;
 
 class StreamPool
 {
+    const STREAM_AVAILABLE = 0;
+    const STREAM_OCCUPIED = 1;
+
     private $stream_pool = [];
     private $available_streams = [];
     private $occupied_streams = [];
@@ -41,7 +44,7 @@ class StreamPool
      */
     public function releaseStream($stream_id)
     {
-        $this->stream_pool[$stream_id]['status'] = 0;
+        $this->stream_pool[$stream_id]['status'] = self::STREAM_AVAILABLE;
         $this->removeOccupiedStream($stream_id);
         $this->addAvailableStream($stream_id);
     }
@@ -54,7 +57,7 @@ class StreamPool
     public function createStream()
     {
         $stream = fopen($this->url, 'a');
-        $this->stream_pool[] = ['stream' => $stream, 'status' => 0];
+        $this->stream_pool[] = ['stream' => $stream, 'status' => self::STREAM_AVAILABLE];
         return count($this->stream_pool) - 1;
     }
 
@@ -65,7 +68,7 @@ class StreamPool
      */
     public function occupyStream($stream_id)
     {
-        $this->stream_pool[$stream_id]['status'] = 1;
+        $this->stream_pool[$stream_id]['status'] = self::STREAM_OCCUPIED;
         $this->removeAvailableStream($stream_id);
         $this->addOccupiedStream($stream_id);
     }
