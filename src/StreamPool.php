@@ -83,7 +83,7 @@ class StreamPool
             $stream_id = array_pop($this->available_streams);
             $this->occupyStream($stream_id);
         }
-        if (!$stream) {
+        if ($stream_id <= 0) {
             if (count($this->stream_pool) < $this->stream_pool_max_size) {
                 $stream_id = $this->createStream();
                 $this->occupyStream($stream_id);
