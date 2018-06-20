@@ -19,10 +19,7 @@ class Handler extends AbstractProcessingHandler
     private $errorMessage;
     protected $filePermission;
     private $dirCreated;
-    private $stream_pool = [];
-    private $available_streams = [];
-    private $occupied_streams = [];
-    private $stream_pool_max_size;
+    private $stream_pool;
 
     /**
      * @param resource|string $stream
@@ -53,16 +50,7 @@ class Handler extends AbstractProcessingHandler
 
         $this->filePermission = $filePermission;
 
-        $this->stream_pool_max_size = $stream_pool_max_size;
-
-        if ($stream_pool_size > $stream_pool_max_size) {
-            $stream_pool_size = $stream_pool_max_size;
-        }
-
-        for($i = 0; $i < $stream_pool_size; ++$i) {
-            $stream_id = $this->createStream();
-            $this->releaseStream($stream_id);
-        }
+        $this->stream_pool = new StreamPool($this->url, $stream_pool_size, $stream_pool_max_size);
     }
 
     /**
@@ -70,82 +58,7 @@ class Handler extends AbstractProcessingHandler
      */
     public function close()
     {
-        foreach ($this->stream_pool as $stream_id => $stream) {
-            fclose($stream['stream']);
-            unset($this->stream_pool[$stream_id]);
-            if (isset($this->available_streams[$stream_id])) {
-                unset($this->available_streams[$stream_id]);
-            }
-            if (isset($this->occupied_streams[$stream_id])) {
-                unset($this->occupied_streams[$stream_id]);
-            }
-        }
-    }
-
-    /**
-     * Release a stream resource to available stream pool
-     *
-     * @param $stream_id
-     */
-    public function releaseStream($stream_id)
-    {
-        $this->stream_pool[$stream_id]['status'] = 0;
-        if (isset($this->occupied_streams[$stream_id])) {
-            unset($this->occupied_streams[$stream_id]);
-        }
-        $this->available_streams[$stream_id] = $stream_id;
-    }
-
-    /**
-     * Create a stream resource to stream pool
-     *
-     * @return int
-     */
-    public function createStream()
-    {
-        $stream = fopen($this->url, 'a');
-        $this->stream_pool[] = ['stream' => $stream, 'status' => 0];
-        return count($this->stream_pool) - 1;
-    }
-
-    /**
-     * Put a stream resource to occupied stream pool
-     *
-     * @param $stream_id
-     */
-    public function occupyStream($stream_id)
-    {
-        $this->stream_pool[$stream_id]['status'] = 1;
-        if (isset($this->available_streams[$stream_id])) {
-            unset($this->available_streams[$stream_id]);
-        }
-        $this->occupied_streams[$stream_id] = $stream_id;
-    }
-
-    /**
-     * Pick an available stream resource
-     *
-     * @return array
-     */
-    public function pickStream()
-    {
-        $stream = null;
-        $stream_id = 0;
-        if (count($this->available_streams) > 0) {
-            $stream_id = array_pop($this->available_streams);
-            $this->occupyStream($stream_id);
-        }
-        if (!$stream) {
-            if (count($this->stream_pool) < $this->stream_pool_max_size) {
-                $stream_id = $this->createStream();
-                $this->occupyStream($stream_id);
-            }
-        }
-        if ($stream_id > 0) {
-            $stream = $this->stream_pool[$stream_id]['stream'];
-        }
-
-        return [$stream_id, $stream];
+        $this->stream_pool->closeStream();
     }
 
     /**
@@ -170,7 +83,7 @@ class Handler extends AbstractProcessingHandler
         $this->errorMessage = null;
         set_error_handler(array($this, 'customErrorHandler'));
 
-        list($stream_id, $stream) = $this->pickStream();
+        list($stream_id, $stream) = $this->stream_pool->pickStream();
 
         if ($this->filePermission !== null) {
             @chmod($this->url, $this->filePermission);
@@ -200,7 +113,7 @@ class Handler extends AbstractProcessingHandler
                     $thisObj = $this;
                     \go(function () use ($stream, $logContent, $stream_id, $thisObj) {
                         \co::fwrite($stream, $logContent);
-                        $thisObj->releaseStream($stream_id);
+                        $thisObj->stream_pool->releaseStream($stream_id);
                     });
                     return;
                 }
@@ -208,7 +121,7 @@ class Handler extends AbstractProcessingHandler
         }
 
         fwrite($stream, $logContent);
-        $this->releaseStream($stream_id);
+        $this->stream_pool->releaseStream($stream_id);
     }
 
     private function customErrorHandler($code, $msg)
