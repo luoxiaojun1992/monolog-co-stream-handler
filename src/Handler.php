@@ -101,7 +101,11 @@ class Handler extends AbstractProcessingHandler
         if (count($record) > 0) {
             $this->recordBuffer[] = $record;
         }
-        if (!$flushAll && count($this->recordBuffer) < $this->recordBufferMaxSize) {
+        $recordBufferCount = count($this->recordBuffer);
+        if (!$flushAll && $recordBufferCount < $this->recordBufferMaxSize) {
+            return;
+        }
+        if ($recordBufferCount <= 0) {
             return;
         }
 
