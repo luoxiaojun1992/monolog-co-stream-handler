@@ -6,7 +6,15 @@ class HandlerTest extends \PHPUnit\Framework\TestCase
     {
         $log_path = __DIR__ . '/../logs/test.log';
         file_exists($log_path) && unlink($log_path);
-        $handler = new \Lxj\Monolog\Co\Stream\Handler($log_path);
+        $handler = new \Lxj\Monolog\Co\Stream\Handler(
+            $log_path,
+            \Monolog\Logger::DEBUG,
+            true,
+            null,
+            100,
+            1024,
+            8
+        );
         $formatter = new \Monolog\Formatter\LineFormatter("%message%\n");
         $handler->setFormatter($formatter);
         $monolog = new \Monolog\Logger('test');

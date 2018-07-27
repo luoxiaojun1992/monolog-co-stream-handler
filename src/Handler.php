@@ -20,14 +20,17 @@ class Handler extends AbstractProcessingHandler
     protected $filePermission;
     private $dirCreated;
     private $stream_pool;
+    private $recordBuffer = [];
+    private $recordBufferMaxSize = 10;
 
     /**
      * @param resource|string $stream
-     * @param int             $level                 The minimum logging level at which this handler will be triggered
-     * @param Boolean         $bubble                Whether the messages that are handled can bubble up the stack or not
-     * @param int|null        $filePermission        Optional file permissions (default (0644) are only for owner read/write)
-     * @param int             $stream_pool_size      Initial Size of stream pool
-     * @param int             $stream_pool_max_size  Max size of stream pool
+     * @param int             $level                    The minimum logging level at which this handler will be triggered
+     * @param Boolean         $bubble                   Whether the messages that are handled can bubble up the stack or not
+     * @param int|null        $filePermission           Optional file permissions (default (0644) are only for owner read/write)
+     * @param int             $stream_pool_size         Initial Size of stream pool
+     * @param int             $stream_pool_max_size     Max size of stream pool
+     * @param int             $record_buffer_max_size   Max size of record buffer
      *
      * @throws \Exception                If a missing directory is not buildable
      * @throws \InvalidArgumentException If stream is not a resource or string
@@ -38,7 +41,8 @@ class Handler extends AbstractProcessingHandler
         $bubble = true,
         $filePermission = null,
         $stream_pool_size = 100,
-        $stream_pool_max_size = 1024
+        $stream_pool_max_size = 1024,
+        $record_buffer_max_size = 10
     )
     {
         parent::__construct($level, $bubble);
@@ -52,6 +56,8 @@ class Handler extends AbstractProcessingHandler
 
         $this->createDir();
         $this->stream_pool = new StreamPool($this->url, $stream_pool_size, $stream_pool_max_size);
+
+        $this->recordBufferMaxSize = $record_buffer_max_size;
     }
 
     /**
@@ -59,6 +65,17 @@ class Handler extends AbstractProcessingHandler
      */
     public function close()
     {
+        if (count($this->recordBuffer) > 0) {
+            $this->write([], true);
+            if (extension_loaded('swoole')) {
+                if (function_exists('\go')) {
+                    if (class_exists('\co')) {
+                        \swoole_event::wait();
+                    }
+                }
+            }
+        }
+
         $this->stream_pool->closeStream();
     }
 
@@ -75,11 +92,19 @@ class Handler extends AbstractProcessingHandler
     /**
      * {@inheritdoc}
      */
-    protected function write(array $record)
+    protected function write(array $record, $flushAll = false)
     {
         if (null === $this->url || '' === $this->url) {
             throw new \LogicException('Missing stream url, the stream can not be opened. This may be caused by a premature call to close().');
         }
+
+        if (count($record) > 0) {
+            $this->recordBuffer[] = $record;
+        }
+        if (!$flushAll && count($this->recordBuffer) < $this->recordBufferMaxSize) {
+            return;
+        }
+
         $this->createDir();
         $this->errorMessage = null;
         set_error_handler(array($this, 'customErrorHandler'));
@@ -95,18 +120,23 @@ class Handler extends AbstractProcessingHandler
             throw new \UnexpectedValueException(sprintf('The stream or file "%s" could not be opened: ' . $this->errorMessage, $this->url));
         }
 
-        $this->streamWrite($stream, $record, $stream_id);
+        $this->streamWrite($stream, $this->recordBuffer, $stream_id);
+
+        $this->recordBuffer = [];
     }
 
     /**
      * Write to stream
      * @param resource $stream
-     * @param array $record
+     * @param array $records
      * @param int $stream_id
      */
-    protected function streamWrite($stream, array $record, $stream_id)
+    protected function streamWrite($stream, array $records, $stream_id)
     {
-        $logContent = (string)$record['formatted'];
+        $logContent = '';
+        foreach ($records as $record) {
+            $logContent .= (string)$record['formatted'];
+        }
 
         if (extension_loaded('swoole')) {
             if (function_exists('\go')) {
