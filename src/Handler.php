@@ -119,6 +119,12 @@ class Handler extends AbstractProcessingHandler
         try {
             $this->streamWrite($stream, $records, $stream_id);
         } catch (\Exception $e) {
+            if (!is_null($stream_id)) {
+                $this->stream_pool->restoreStream($stream_id);
+            } else {
+                $stream = null;
+            }
+
             list($stream_id, $stream) = $this->prepareWrite();
             $this->streamWrite($stream, $records, $stream_id);
         }
