@@ -124,6 +124,11 @@ class Handler extends AbstractProcessingHandler
         }
     }
 
+    /**
+     * Prepare for write
+     *
+     * @return array
+     */
     private function prepareWrite()
     {
         $this->createDir();
