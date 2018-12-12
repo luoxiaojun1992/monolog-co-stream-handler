@@ -113,16 +113,29 @@ class Handler extends AbstractProcessingHandler
             return;
         }
 
+        list($stream_id, $stream) = $this->prepareWrite();
+
+        $records = array_splice($this->recordBuffer, 0);
+        try {
+            $this->streamWrite($stream, $records, $stream_id);
+        } catch (\Exception $e) {
+            list($stream_id, $stream) = $this->prepareWrite();
+            $this->streamWrite($stream, $records, $stream_id);
+        }
+    }
+
+    private function prepareWrite()
+    {
         $this->createDir();
+
         $this->errorMessage = null;
         set_error_handler(array($this, 'customErrorHandler'));
-
         list($stream_id, $stream) = $this->stream_pool->pickStream();
-
         if ($this->filePermission !== null) {
             @chmod($this->url, $this->filePermission);
         }
         restore_error_handler();
+
         if (!is_resource($stream)) {
             if (!is_null($stream_id)) {
                 $stream = $this->stream_pool->restoreStream($stream_id);
@@ -140,8 +153,7 @@ class Handler extends AbstractProcessingHandler
             }
         }
 
-        $records = array_splice($this->recordBuffer, 0);
-        $this->streamWrite($stream, $records, $stream_id);
+        return [$stream_id, $stream];
     }
 
     /**
