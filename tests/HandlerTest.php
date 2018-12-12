@@ -12,7 +12,6 @@ class HandlerTest extends \PHPUnit\Framework\TestCase
             true,
             null,
             100,
-            1024,
             8
         );
         $formatter = new \Monolog\Formatter\LineFormatter("%message%\n");
@@ -59,6 +58,7 @@ EOF;
         swoole_event::wait();
 
         $start = time();
+
         while (!file_get_contents($log_path)) {
             if (time() - $start > 5) {
                 break;

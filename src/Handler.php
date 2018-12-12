@@ -29,7 +29,6 @@ class Handler extends AbstractProcessingHandler
      * @param Boolean         $bubble                   Whether the messages that are handled can bubble up the stack or not
      * @param int|null        $filePermission           Optional file permissions (default (0644) are only for owner read/write)
      * @param int             $stream_pool_size         Initial Size of stream pool
-     * @param int             $stream_pool_max_size     Max size of stream pool
      * @param int             $record_buffer_max_size   Max size of record buffer
      *
      * @throws \Exception                If a missing directory is not buildable
@@ -41,7 +40,6 @@ class Handler extends AbstractProcessingHandler
         $bubble = true,
         $filePermission = null,
         $stream_pool_size = 100,
-        $stream_pool_max_size = 1024,
         $record_buffer_max_size = 10
     )
     {
@@ -55,7 +53,7 @@ class Handler extends AbstractProcessingHandler
         $this->filePermission = $filePermission;
 
         $this->createDir();
-        $this->stream_pool = new StreamPool($this->url, $stream_pool_size, $stream_pool_max_size);
+        $this->stream_pool = new StreamPool($this->url, $stream_pool_size);
 
         $this->recordBufferMaxSize = $record_buffer_max_size;
     }

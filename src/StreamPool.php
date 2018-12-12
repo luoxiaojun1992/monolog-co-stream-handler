@@ -10,13 +10,13 @@ class StreamPool
     private $stream_pool = [];
     private $available_streams = [];
     private $occupied_streams = [];
-    private $stream_pool_max_size;
+    private $stream_pool_size;
     private $url;
 
-    public function __construct($url, $stream_pool_size, $stream_pool_max_size = 1024)
+    public function __construct($url, $stream_pool_size)
     {
         $this->url = $url;
-        $this->stream_pool_max_size = $stream_pool_max_size;
+        $this->stream_pool_size = $stream_pool_size;
         $this->initStreamPool($stream_pool_size);
     }
 
@@ -27,10 +27,6 @@ class StreamPool
      */
     public function initStreamPool($stream_pool_size)
     {
-        if ($stream_pool_size > $this->stream_pool_max_size) {
-            $stream_pool_size = $this->stream_pool_max_size;
-        }
-
         for($i = 0; $i < $stream_pool_size; ++$i) {
             $stream_id = $this->createStream();
             $this->releaseStream($stream_id);
@@ -44,9 +40,11 @@ class StreamPool
      */
     public function releaseStream($stream_id)
     {
-        $this->setStreamStatus($stream_id, self::STREAM_AVAILABLE);
-        $this->removeOccupiedStream($stream_id);
-        $this->addAvailableStream($stream_id);
+        if ($stream_id) {
+            $this->setStreamStatus($stream_id, self::STREAM_AVAILABLE);
+            $this->removeOccupiedStream($stream_id);
+            $this->addAvailableStream($stream_id);
+        }
     }
 
     /**
@@ -56,9 +54,19 @@ class StreamPool
      */
     public function createStream()
     {
-        $stream = fopen($this->url, 'a');
+        $stream = $this->fd();
         $this->stream_pool[] = ['stream' => $stream, 'status' => self::STREAM_AVAILABLE];
         return count($this->stream_pool) - 1;
+    }
+
+    /**
+     * Create fd
+     *
+     * @return bool|resource
+     */
+    private function fd()
+    {
+        return fopen($this->url, 'a');
     }
 
     /**
@@ -80,20 +88,12 @@ class StreamPool
      */
     public function pickStream()
     {
-        $stream = null;
-        $stream_id = 0;
-        if (count($this->available_streams) > 0) {
-            $stream_id = array_pop($this->available_streams);
+        $stream_id = array_pop($this->available_streams);
+        if ($stream_id) {
             $this->occupyStream($stream_id);
-        }
-        if ($stream_id <= 0) {
-            if (count($this->stream_pool) < $this->stream_pool_max_size) {
-                $stream_id = $this->createStream();
-                $this->occupyStream($stream_id);
-            }
-        }
-        if ($stream_id > 0) {
             $stream = $this->stream_pool[$stream_id]['stream'];
+        } else {
+            $stream = $this->fd();
         }
 
         return [$stream_id, $stream];
