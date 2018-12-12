@@ -40,7 +40,7 @@ class StreamPool
      */
     public function releaseStream($stream_id)
     {
-        if ($stream_id) {
+        if (!is_null($stream_id)) {
             $this->setStreamStatus($stream_id, self::STREAM_AVAILABLE);
             $this->removeOccupiedStream($stream_id);
             $this->addAvailableStream($stream_id);
@@ -94,6 +94,7 @@ class StreamPool
             $stream = $this->stream_pool[$stream_id]['stream'];
         } else {
             $stream = $this->fd();
+            $stream_id = null;
         }
 
         return [$stream_id, $stream];
@@ -105,10 +106,7 @@ class StreamPool
     public function closeStream()
     {
         foreach ($this->stream_pool as $stream_id => $stream) {
-            fclose($stream['stream']);
-            unset($this->stream_pool[$stream_id]);
-            $this->removeAvailableStream($stream_id);
-            $this->removeOccupiedStream($stream_id);
+            $this->removeStream($stream_id);
         }
     }
 
@@ -134,6 +132,30 @@ class StreamPool
         if (isset($this->occupied_streams[$stream_id])) {
             unset($this->occupied_streams[$stream_id]);
         }
+    }
+
+    public function removeStream($stream_id)
+    {
+        if (isset($this->stream_pool[$stream_id])) {
+            $stream = $this->stream_pool[$stream_id];
+            if ($stream && is_resource($stream)) {
+                fclose($stream['stream']);
+            }
+            unset($this->stream_pool[$stream_id]);
+            $this->removeAvailableStream($stream_id);
+            $this->removeOccupiedStream($stream_id);
+        }
+    }
+
+    public function restoreStream($stream_id)
+    {
+        if (isset($this->stream_pool[$stream_id])) {
+            $new_stream = $this->fd();
+            $this->stream_pool[$stream_id] = $new_stream;
+            return $new_stream;
+        }
+
+        return null;
     }
 
     private function setStreamStatus($stream_id, $status)

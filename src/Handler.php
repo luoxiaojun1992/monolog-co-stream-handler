@@ -124,14 +124,23 @@ class Handler extends AbstractProcessingHandler
         }
         restore_error_handler();
         if (!is_resource($stream)) {
-            $stream = null;
-            throw new \UnexpectedValueException(sprintf('The stream or file "%s" could not be opened: ' . $this->errorMessage, $this->url));
+            if (!is_null($stream_id)) {
+                $stream = $this->stream_pool->restoreStream($stream_id);
+            } else {
+                list($stream_id, $stream) = $this->stream_pool->pickStream();
+            }
+
+            if (!is_resource($stream)) {
+                if (!is_null($stream_id)) {
+                    $this->stream_pool->removeStream($stream_id);
+                } else {
+                    $stream = null;
+                }
+                throw new \UnexpectedValueException(sprintf('The stream or file "%s" could not be opened: ' . $this->errorMessage, $this->url));
+            }
         }
 
         $records = array_splice($this->recordBuffer, 0);
-        if (count($records) <= 0) {
-            return;
-        }
         $this->streamWrite($stream, $records, $stream_id);
     }
 
@@ -143,6 +152,11 @@ class Handler extends AbstractProcessingHandler
      */
     protected function streamWrite($stream, array $records, $stream_id)
     {
+        if (count($records) <= 0) {
+            $this->stream_pool->releaseStream($stream_id);
+            return;
+        }
+
         $logContent = '';
         foreach ($records as $record) {
             $logContent .= (string)$record['formatted'];
