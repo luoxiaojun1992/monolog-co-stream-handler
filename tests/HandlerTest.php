@@ -12,7 +12,8 @@ class HandlerTest extends \PHPUnit\Framework\TestCase
             true,
             null,
             100,
-            8
+            8,
+            true
         );
         $formatter = new \Monolog\Formatter\LineFormatter("%message%\n");
         $handler->setFormatter($formatter);

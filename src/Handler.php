@@ -22,6 +22,7 @@ class Handler extends AbstractProcessingHandler
     private $stream_pool;
     private $recordBuffer = [];
     private $recordBufferMaxSize = 10;
+    private $coroutine = false;
 
     /**
      * @param resource|string $stream
@@ -30,6 +31,7 @@ class Handler extends AbstractProcessingHandler
      * @param int|null        $filePermission           Optional file permissions (default (0644) are only for owner read/write)
      * @param int             $stream_pool_size         Initial Size of stream pool
      * @param int             $record_buffer_max_size   Max size of record buffer
+     * @param Boolean         $coroutine                Coroutine switch
      *
      * @throws \Exception                If a missing directory is not buildable
      * @throws \InvalidArgumentException If stream is not a resource or string
@@ -40,7 +42,8 @@ class Handler extends AbstractProcessingHandler
         $bubble = true,
         $filePermission = null,
         $stream_pool_size = 100,
-        $record_buffer_max_size = 10
+        $record_buffer_max_size = 10,
+        $coroutine = false
     )
     {
         parent::__construct($level, $bubble);
@@ -56,6 +59,7 @@ class Handler extends AbstractProcessingHandler
         $this->stream_pool = new StreamPool($this->url, $stream_pool_size);
 
         $this->recordBufferMaxSize = $record_buffer_max_size;
+        $this->coroutine = $coroutine;
     }
 
     /**
@@ -65,10 +69,12 @@ class Handler extends AbstractProcessingHandler
     {
         if (count($this->recordBuffer) > 0) {
             $this->write([], true);
-            if (extension_loaded('swoole')) {
-                if (function_exists('\go')) {
-                    if (class_exists('\co')) {
-                        \swoole_event::wait();
+            if ($this->coroutine) {
+                if (extension_loaded('swoole')) {
+                    if (function_exists('\go')) {
+                        if (class_exists('\co')) {
+                            \swoole_event::wait();
+                        }
                     }
                 }
             }
@@ -140,15 +146,17 @@ class Handler extends AbstractProcessingHandler
             $logContent .= (string)$record['formatted'];
         }
 
-        if (extension_loaded('swoole')) {
-            if (function_exists('\go')) {
-                if (class_exists('\co')) {
-                    $thisObj = $this;
-                    \go(function () use ($stream, $logContent, $stream_id, $thisObj) {
-                        \co::fwrite($stream, $logContent);
-                        $thisObj->stream_pool->releaseStream($stream_id);
-                    });
-                    return;
+        if ($this->coroutine) {
+            if (extension_loaded('swoole')) {
+                if (function_exists('\go')) {
+                    if (class_exists('\co')) {
+                        $thisObj = $this;
+                        \go(function () use ($stream, $logContent, $stream_id, $thisObj) {
+                            \co::fwrite($stream, $logContent);
+                            $thisObj->stream_pool->releaseStream($stream_id);
+                        });
+                        return;
+                    }
                 }
             }
         }
