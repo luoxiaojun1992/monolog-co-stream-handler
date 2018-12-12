@@ -105,7 +105,7 @@ class Handler extends AbstractProcessingHandler
         if (count($record) > 0) {
             $this->recordBuffer[] = $record;
         }
-        $recordBufferCount = count($this->recordBuffer);
+        $recordBufferCount = $this->countRecordBuffer();
         if (!$flushAll && $recordBufferCount < $this->recordBufferMaxSize) {
             return;
         }
@@ -246,5 +246,10 @@ class Handler extends AbstractProcessingHandler
             }
         }
         $this->dirCreated = true;
+    }
+
+    public function countRecordBuffer()
+    {
+        return count($this->recordBuffer);
     }
 }
