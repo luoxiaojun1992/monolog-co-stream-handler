@@ -128,9 +128,11 @@ class Handler extends AbstractProcessingHandler
             throw new \UnexpectedValueException(sprintf('The stream or file "%s" could not be opened: ' . $this->errorMessage, $this->url));
         }
 
-        $this->streamWrite($stream, $this->recordBuffer, $stream_id);
-
-        $this->recordBuffer = [];
+        $records = array_splice($this->recordBuffer, 0);
+        if (count($records) <= 0) {
+            return;
+        }
+        $this->streamWrite($stream, $records, $stream_id);
     }
 
     /**
