@@ -10,7 +10,7 @@
     }
   ],
   "require": {
-    "monolog/monolog": "*",
+    "monolog/monolog": "^1",
     "phpunit/phpunit": "*"
   },
   "autoload": {
