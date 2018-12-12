@@ -55,6 +55,8 @@ test emergency 2
 
 EOF;
 
+        \swoole_event::wait();
+
         $start = time();
 
         while (!file_get_contents($log_path)) {
