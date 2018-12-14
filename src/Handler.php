@@ -95,6 +95,10 @@ class Handler extends AbstractProcessingHandler
 
     /**
      * {@inheritdoc}
+     *
+     * @param array $record
+     * @param bool $flushAll
+     * @throws \Exception
      */
     protected function write(array $record, $flushAll = false)
     {
