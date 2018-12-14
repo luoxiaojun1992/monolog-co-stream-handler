@@ -117,16 +117,26 @@ class Handler extends AbstractProcessingHandler
 
         $records = array_splice($this->recordBuffer, 0);
         try {
-            $this->streamWrite($stream, $records, $stream_id);
-        } catch (\Exception $e) {
-            if (!is_null($stream_id)) {
-                $this->stream_pool->restoreStream($stream_id);
-            } else {
-                $stream = null;
-            }
+            try {
+                $this->streamWrite($stream, $records, $stream_id);
+            } catch (\Exception $e) {
+                if (!is_null($stream_id)) {
+                    $stream = $this->stream_pool->restoreStream($stream_id);
+                    if (!is_resource($stream)) {
+                        $this->stream_pool->removeStream($stream_id);
+                    }
+                } else {
+                    $stream = null;
+                }
 
-            list($stream_id, $stream) = $this->prepareWrite();
-            $this->streamWrite($stream, $records, $stream_id);
+                list($stream_id, $stream) = $this->prepareWrite();
+                $this->streamWrite($stream, $records, $stream_id);
+            }
+        } catch (\Exception $writeEx) {
+            foreach ($records as $record) {
+                array_push($this->recordBuffer, $record);
+            }
+            throw $writeEx;
         }
     }
 
