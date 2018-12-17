@@ -56,7 +56,7 @@ class StreamPool
     {
         $stream = $this->fd();
         $this->stream_pool[] = ['stream' => $stream, 'status' => self::STREAM_AVAILABLE];
-        return count($this->stream_pool) - 1;
+        return $this->countPool() - 1;
     }
 
     /**
@@ -166,5 +166,10 @@ class StreamPool
     public function __destruct()
     {
         $this->closeStream();
+    }
+
+    public function countPool()
+    {
+        return count($this->stream_pool);
     }
 }

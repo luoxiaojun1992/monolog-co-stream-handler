@@ -262,8 +262,19 @@ class Handler extends AbstractProcessingHandler
         $this->dirCreated = true;
     }
 
+    /**
+     * @return int
+     */
     public function countRecordBuffer()
     {
         return count($this->recordBuffer);
+    }
+
+    /**
+     * @return StreamPool
+     */
+    public function getStreamPool()
+    {
+        return $this->stream_pool;
     }
 }
