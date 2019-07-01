@@ -62,24 +62,24 @@ class Handler extends AbstractProcessingHandler
         $this->coroutine = $coroutine;
     }
 
+    public function flush()
+    {
+        if (count($this->recordBuffer) > 0) {
+            $this->write([], true);
+            if ($this->coroutine) {
+                if ($this->coroutineEnabled()) {
+                    \swoole_event::wait();
+                }
+            }
+        }
+    }
+
     /**
      * {@inheritdoc}
      */
     public function close()
     {
-        if (count($this->recordBuffer) > 0) {
-            $this->write([], true);
-            if ($this->coroutine) {
-                if (extension_loaded('swoole')) {
-                    if (function_exists('\go')) {
-                        if (class_exists('\co')) {
-                            \swoole_event::wait();
-                        }
-                    }
-                }
-            }
-        }
-
+        $this->flush();
         $this->stream_pool->closeStream();
     }
 
@@ -200,17 +200,13 @@ class Handler extends AbstractProcessingHandler
         }
 
         if ($this->coroutine) {
-            if (extension_loaded('swoole')) {
-                if (function_exists('\go')) {
-                    if (class_exists('\co')) {
-                        $thisObj = $this;
-                        \go(function () use ($stream, $logContent, $stream_id, $thisObj) {
-                            \co::fwrite($stream, $logContent);
-                            $thisObj->stream_pool->releaseStream($stream_id);
-                        });
-                        return;
-                    }
-                }
+            if ($this->coroutineEnabled()) {
+                $thisObj = $this;
+                \go(function () use ($stream, $logContent, $stream_id, $thisObj) {
+                    \co::fwrite($stream, $logContent);
+                    $thisObj->stream_pool->releaseStream($stream_id);
+                });
+                return;
             }
         }
 
@@ -260,6 +256,19 @@ class Handler extends AbstractProcessingHandler
             }
         }
         $this->dirCreated = true;
+    }
+
+    private function coroutineEnabled()
+    {
+        if (extension_loaded('swoole')) {
+            if (function_exists('\go')) {
+                if (class_exists('\co')) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     /**
