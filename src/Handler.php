@@ -23,6 +23,7 @@ class Handler extends AbstractProcessingHandler
     private $recordBuffer = [];
     private $recordBufferMaxSize = 10;
     private $coroutine = false;
+    private $restoreStreamsLock = [true];
 
     /**
      * @param resource|string $stream
@@ -56,10 +57,15 @@ class Handler extends AbstractProcessingHandler
         $this->filePermission = $filePermission;
 
         $this->createDir();
-        $this->stream_pool = new StreamPool($this->url, $stream_pool_size);
+        $this->createStreamPool($stream_pool_size);
 
         $this->recordBufferMaxSize = $record_buffer_max_size;
         $this->coroutine = $coroutine;
+    }
+
+    private function createStreamPool($stream_pool_size)
+    {
+        $this->stream_pool = new StreamPool($this->url, $stream_pool_size);
     }
 
     public function flush()
@@ -126,19 +132,20 @@ class Handler extends AbstractProcessingHandler
             } catch (\Exception $e) {
                 if (!is_null($stream_id)) {
                     $stream = $this->stream_pool->restoreStream($stream_id);
-                    if (!is_resource($stream)) {
-                        $this->stream_pool->removeStream($stream_id);
-                    }
                 } else {
-                    $stream = null;
+                    list($stream_id, $stream) = $this->prepareWrite();
                 }
 
-                list($stream_id, $stream) = $this->prepareWrite();
                 $this->streamWrite($stream, $records, $stream_id);
             }
         } catch (\Exception $writeEx) {
             foreach ($records as $record) {
                 array_push($this->recordBuffer, $record);
+            }
+            if (!is_null($stream_id)) {
+                $this->stream_pool->removeStream($stream_id);
+            } else {
+                $stream = null;
             }
             throw $writeEx;
         }
@@ -153,6 +160,13 @@ class Handler extends AbstractProcessingHandler
     {
         $this->createDir();
 
+        if (array_pop($this->restoreStreamsLock)) {
+            if (!file_exists($this->url)) {
+                $this->stream_pool->restoreStreams();
+            }
+            array_push($this->restoreStreamsLock, true);
+        }
+
         $this->errorMessage = null;
         set_error_handler(array($this, 'customErrorHandler'));
         list($stream_id, $stream) = $this->stream_pool->pickStream();
@@ -160,23 +174,6 @@ class Handler extends AbstractProcessingHandler
             @chmod($this->url, $this->filePermission);
         }
         restore_error_handler();
-
-        if (!is_resource($stream)) {
-            if (!is_null($stream_id)) {
-                $stream = $this->stream_pool->restoreStream($stream_id);
-            } else {
-                list($stream_id, $stream) = $this->stream_pool->pickStream();
-            }
-
-            if (!is_resource($stream)) {
-                if (!is_null($stream_id)) {
-                    $this->stream_pool->removeStream($stream_id);
-                } else {
-                    $stream = null;
-                }
-                throw new \UnexpectedValueException(sprintf('The stream or file "%s" could not be opened: ' . $this->errorMessage, $this->url));
-            }
-        }
 
         return [$stream_id, $stream];
     }
@@ -203,18 +200,22 @@ class Handler extends AbstractProcessingHandler
             if ($this->coroutineEnabled()) {
                 $thisObj = $this;
                 \go(function () use ($stream, $logContent, $stream_id, $thisObj) {
-                    \co::fwrite($stream, $logContent);
+                    if (!\co::fwrite($stream, $logContent)) {
+                        throw new \Exception('fwrite error');
+                    }
                     $thisObj->stream_pool->releaseStream($stream_id);
                 });
                 return;
             }
         }
 
-        fwrite($stream, $logContent);
+        if (!fwrite($stream, $logContent)) {
+            throw new \Exception('fwrite error');
+        }
         $this->stream_pool->releaseStream($stream_id);
     }
 
-    private function customErrorHandler($code, $msg)
+    public function customErrorHandler($code, $msg)
     {
         $this->errorMessage = preg_replace('{^(fopen|mkdir)\(.*?\): }', '', $msg);
     }

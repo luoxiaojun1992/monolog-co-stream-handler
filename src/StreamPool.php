@@ -151,11 +151,18 @@ class StreamPool
     {
         if (isset($this->stream_pool[$stream_id])) {
             $new_stream = $this->fd();
-            $this->stream_pool[$stream_id] = $new_stream;
+            $this->stream_pool[$stream_id]['stream'] = $new_stream;
             return $new_stream;
         }
 
         return null;
+    }
+
+    public function restoreStreams()
+    {
+        foreach ($this->stream_pool as $stream_id => $stream) {
+            $this->restoreStream($stream_id);
+        }
     }
 
     private function setStreamStatus($stream_id, $status)
