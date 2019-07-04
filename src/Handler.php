@@ -145,6 +145,7 @@ class Handler extends AbstractProcessingHandler
             if (!is_null($stream_id)) {
                 $this->stream_pool->removeStream($stream_id);
             } else {
+                fclose($stream);
                 $stream = null;
             }
             throw $writeEx;
@@ -162,6 +163,7 @@ class Handler extends AbstractProcessingHandler
 
         if (array_pop($this->restoreStreamsLock)) {
             if (!file_exists($this->url)) {
+                touch($this->url);
                 $this->stream_pool->restoreStreams();
             }
             array_push($this->restoreStreamsLock, true);

@@ -150,6 +150,7 @@ class StreamPool
     public function restoreStream($stream_id)
     {
         if (isset($this->stream_pool[$stream_id])) {
+            fclose($this->stream_pool[$stream_id]['stream']);
             $new_stream = $this->fd();
             $this->stream_pool[$stream_id]['stream'] = $new_stream;
             return $new_stream;
