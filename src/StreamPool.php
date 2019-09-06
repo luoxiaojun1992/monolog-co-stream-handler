@@ -88,7 +88,9 @@ class StreamPool
      */
     public function pickStream()
     {
-        $stream_id = array_pop($this->available_streams);
+        $stream_id = Swoole::withoutPreemptive(function () {
+            return array_pop($this->available_streams);
+        });
         if ($stream_id) {
             $this->occupyStream($stream_id);
             $stream = $this->stream_pool[$stream_id]['stream'];
@@ -105,9 +107,11 @@ class StreamPool
      */
     public function closeStream()
     {
-        foreach ($this->stream_pool as $stream_id => $stream) {
-            $this->removeStream($stream_id);
-        }
+        Swoole::withoutPreemptive(function () {
+            foreach ($this->stream_pool as $stream_id => $stream) {
+                $this->removeStream($stream_id);
+            }
+        });
     }
 
     private function addAvailableStream($stream_id)
@@ -161,9 +165,11 @@ class StreamPool
 
     public function restoreStreams()
     {
-        foreach ($this->stream_pool as $stream_id => $stream) {
-            $this->restoreStream($stream_id);
-        }
+        Swoole::withoutPreemptive(function () {
+            foreach ($this->stream_pool as $stream_id => $stream) {
+                $this->restoreStream($stream_id);
+            }
+        });
     }
 
     private function setStreamStatus($stream_id, $status)

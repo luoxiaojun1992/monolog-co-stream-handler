@@ -140,7 +140,9 @@ class Handler extends AbstractProcessingHandler
             }
         } catch (\Exception $writeEx) {
             foreach ($records as $record) {
-                array_push($this->recordBuffer, $record);
+                Swoole::withoutPreemptive(function () use ($record) {
+                    array_push($this->recordBuffer, $record);
+                });
             }
             if (!is_null($stream_id)) {
                 $this->stream_pool->removeStream($stream_id);
@@ -161,7 +163,9 @@ class Handler extends AbstractProcessingHandler
     {
         $this->createDir();
 
-        if (array_pop($this->restoreStreamsLock)) {
+        if (Swoole::withoutPreemptive(function () {
+            return array_pop($this->restoreStreamsLock);
+        })) {
             if (!file_exists($this->url)) {
                 touch($this->url);
                 $this->stream_pool->restoreStreams();
@@ -182,9 +186,11 @@ class Handler extends AbstractProcessingHandler
 
     /**
      * Write to stream
-     * @param resource $stream
+     *
+     * @param $stream
      * @param array $records
-     * @param int $stream_id
+     * @param $stream_id
+     * @throws \Exception
      */
     protected function streamWrite($stream, array $records, $stream_id)
     {
