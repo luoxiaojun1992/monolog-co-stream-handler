@@ -19,6 +19,6 @@ class Swoole
             }
         }
 
-        return call_user_func_array($callback);
+        return call_user_func($callback);
     }
 }
