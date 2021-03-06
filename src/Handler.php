@@ -24,10 +24,12 @@ class Handler extends AbstractProcessingHandler
     private $recordBufferMaxSize = 10;
     private $coroutine = false;
     private $restoreStreamsLock = [true];
+    protected $syncLevels = [];
 
     /**
      * @param resource|string $stream
      * @param int             $level                    The minimum logging level at which this handler will be triggered
+     * @param array           $syncLevels               The logging levels at one of which the log will be flushed immediately
      * @param Boolean         $bubble                   Whether the messages that are handled can bubble up the stack or not
      * @param int|null        $filePermission           Optional file permissions (default (0644) are only for owner read/write)
      * @param int             $stream_pool_size         Initial Size of stream pool
@@ -40,6 +42,7 @@ class Handler extends AbstractProcessingHandler
     public function __construct(
         $stream,
         $level = Logger::DEBUG,
+        $syncLevels = [],
         $bubble = true,
         $filePermission = null,
         $stream_pool_size = 100,
@@ -48,6 +51,9 @@ class Handler extends AbstractProcessingHandler
     )
     {
         parent::__construct($level, $bubble);
+
+        $this->syncLevels = $syncLevels;
+
         if (is_string($stream)) {
             $this->url = $stream;
         } else {
@@ -112,20 +118,35 @@ class Handler extends AbstractProcessingHandler
             throw new \LogicException('Missing stream url, the stream can not be opened. This may be caused by a premature call to close().');
         }
 
-        if (count($record) > 0) {
-            $this->recordBuffer[] = $record;
+        $level = $record['level'] ?? null;
+
+        if (is_null($level)) {
+            $isSyncLevel = false;
+        } else {
+            $isSyncLevel = in_array($level, $this->syncLevels);
         }
-        $recordBufferCount = $this->countRecordBuffer();
-        if (!$flushAll && $recordBufferCount < $this->recordBufferMaxSize) {
-            return;
-        }
-        if ($recordBufferCount <= 0) {
-            return;
+
+        if (!$isSyncLevel) {
+            if (count($record) > 0) {
+                $this->recordBuffer[] = $record;
+            }
+            $recordBufferCount = $this->countRecordBuffer();
+            if (!$flushAll && $recordBufferCount < $this->recordBufferMaxSize) {
+                return;
+            }
+            if ($recordBufferCount <= 0) {
+                return;
+            }
         }
 
         list($stream_id, $stream) = $this->prepareWrite();
 
-        $records = array_splice($this->recordBuffer, 0);
+        if ($isSyncLevel) {
+            $records = [$record];
+        } else {
+            $records = array_splice($this->recordBuffer, 0);
+        }
+
         try {
             try {
                 $this->streamWrite($stream, $records, $stream_id);
@@ -208,7 +229,16 @@ class Handler extends AbstractProcessingHandler
             if ($this->coroutineEnabled()) {
                 $thisObj = $this;
                 \go(function () use ($stream, $logContent, $stream_id, $thisObj) {
-                    if (!\co::fwrite($stream, $logContent)) {
+                    if (version_compare(swoole_version(), '4.4.6') < 0) {
+                        $writeResult = \co::fwrite($stream, $logContent);
+                    } else {
+                        if (version_compare(swoole_version(), '4.5.1') < 0) {
+                            $writeResult = \co\system::fwrite($stream, $logContent);
+                        } else {
+                            $writeResult = fwrite($stream, $logContent);
+                        }
+                    }
+                    if (!$writeResult) {
                         throw new \Exception('fwrite error');
                     }
                     $thisObj->stream_pool->releaseStream($stream_id);
