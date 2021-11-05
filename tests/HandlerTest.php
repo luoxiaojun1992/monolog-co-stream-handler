@@ -37,6 +37,7 @@ class HandlerTest extends \PHPUnit\Framework\TestCase
             if (time() - $start > 5) {
                 break;
             }
+            sleep(1);
         }
 
         foreach (['test info',
@@ -97,6 +98,7 @@ class HandlerTest extends \PHPUnit\Framework\TestCase
             if (time() - $start > 5) {
                 break;
             }
+            sleep(1);
         }
 
         foreach (['test info',
