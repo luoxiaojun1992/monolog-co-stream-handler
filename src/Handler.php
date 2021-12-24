@@ -32,8 +32,8 @@ class Handler extends AbstractProcessingHandler
      * @param array           $syncLevels               The logging levels at one of which the log will be flushed immediately
      * @param Boolean         $bubble                   Whether the messages that are handled can bubble up the stack or not
      * @param int|null        $filePermission           Optional file permissions (default (0644) are only for owner read/write)
-     * @param int             $stream_pool_size         Initial Size of stream pool
-     * @param int             $record_buffer_max_size   Max size of record buffer
+     * @param int             $streamPoolSize         Initial Size of stream pool
+     * @param int             $recordBufferMaxSize   Max size of record buffer
      * @param Boolean         $coroutine                Coroutine switch
      *
      * @throws \Exception                If a missing directory is not buildable
@@ -45,8 +45,8 @@ class Handler extends AbstractProcessingHandler
         $syncLevels = [],
         $bubble = true,
         $filePermission = null,
-        $stream_pool_size = 100,
-        $record_buffer_max_size = 10,
+        $streamPoolSize = 100,
+        $recordBufferMaxSize = 10,
         $coroutine = false
     )
     {
@@ -63,9 +63,9 @@ class Handler extends AbstractProcessingHandler
         $this->filePermission = $filePermission;
 
         $this->createDir();
-        $this->createStreamPool($stream_pool_size);
+        $this->createStreamPool($streamPoolSize);
 
-        $this->recordBufferMaxSize = $record_buffer_max_size;
+        $this->recordBufferMaxSize = $recordBufferMaxSize;
         $this->coroutine = $coroutine;
     }
 
@@ -144,7 +144,9 @@ class Handler extends AbstractProcessingHandler
         if ($isSyncLevel) {
             $records = [$record];
         } else {
-            $records = array_splice($this->recordBuffer, 0);
+            $records = Swoole::withoutPreemptive(function () {
+                return array_splice($this->recordBuffer, 0);
+            });
         }
 
         try {
